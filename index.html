@@ -30,17 +30,16 @@ body{
     width: 320px;
 }
 
-/* ===== LOADING ===== */
+/* LOADING */
 #loadingText{
     font-size:24px;
     margin:60px 0;
 }
 
-/* ===== TEXT ===== */
+/* TEXT */
 #luxValue{
     font-size:60px;
     font-weight:bold;
-    margin-top:20px;
 }
 
 #statusText{
@@ -49,7 +48,6 @@ body{
 }
 
 #ledState{
-    font-size:18px;
     margin-top:10px;
 }
 
@@ -58,11 +56,7 @@ canvas{
     margin:auto;
 }
 
-/* ===== BUTTON ===== */
-.button-group{
-    margin-top:20px;
-}
-
+/* BUTTON */
 button{
     margin:10px;
     padding:12px 25px;
@@ -70,21 +64,10 @@ button{
     border-radius:12px;
     font-size:18px;
     cursor:pointer;
-    transition:0.2s;
 }
 
-button:active{
-    transform:scale(0.95);
-}
-
-.btn-on{
-    background:lime;
-}
-
-.btn-off{
-    background:red;
-    color:white;
-}
+.btn-on{ background:lime; }
+.btn-off{ background:red; color:white; }
 </style>
 </head>
 
@@ -92,151 +75,146 @@ button:active{
 
 <div class="dashboard">
 
-    <!-- LOADING -->
-    <div id="loadingText">Loading.</div>
+<!-- LOADING -->
+<div id="loadingText">Loading.</div>
 
-    <!-- DASHBOARD -->
-    <div id="mainContent" style="display:none;">
+<!-- MAIN -->
+<div id="mainContent" style="display:none;">
 
-        <h2 id="sensorName">🌞</h2>
+<h2 id="sensorName">🌞</h2>
 
-        <canvas id="chart" width="300" height="300"></canvas>
+<canvas id="chart" width="300" height="300"></canvas>
 
-        <div id="luxValue">-- lux</div>
+<div id="luxValue">-- lux</div>
+<div id="statusText">...</div>
+<div id="ledState">💡 LED OFF</div>
 
-        <div id="statusText">...</div>
-
-        <div id="ledState">💡 LED OFF</div>
-
-        <div class="button-group">
-            <button class="btn-on" onclick="turnOn()">ON</button>
-            <button class="btn-off" onclick="turnOff()">OFF</button>
-        </div>
-
-    </div>
+<button class="btn-on" onclick="turnOn()">ON</button>
+<button class="btn-off" onclick="turnOff()">OFF</button>
 
 </div>
 
-<!-- 🔊 SOUND -->
-<audio id="clickSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+</div>
+
+<!-- SOUND -->
+<audio id="clickSound" src="https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3"></audio>
 
 <script>
 
 // ===== LOADING ANIMATION =====
 let dots = 1;
-
-setInterval(() => {
-    let text = "Loading" + ".".repeat(dots);
-    document.getElementById("loadingText").innerText = text;
-
-    dots++;
-    if(dots > 3) dots = 1;
-}, 500);
-
-// ===== DRAW CHART =====
-function drawPie(lux, status){
-    const ctx = document.getElementById("chart").getContext("2d");
-    ctx.clearRect(0,0,300,300);
-
-    const cx=150,cy=150,r=100;
-    const percent=Math.min(lux/1500,1);
-    const angle=percent*Math.PI*2;
-
-    ctx.beginPath();
-    ctx.arc(cx,cy,r,0,Math.PI*2);
-    ctx.strokeStyle='rgba(255,255,255,0.1)';
-    ctx.lineWidth=20;
-    ctx.stroke();
-
-    let color = (status === "OK") ? "lime" : "red";
-
-    ctx.beginPath();
-    ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+angle);
-    ctx.strokeStyle=color;
-    ctx.lineWidth=20;
-    ctx.lineCap='round';
-    ctx.stroke();
-
-    ctx.fillStyle='white';
-    ctx.font='bold 24px sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText(Math.round(lux)+' lux',cx,cy);
-}
+setInterval(()=>{
+document.getElementById("loadingText").innerText =
+"Loading"+".".repeat(dots);
+dots = dots>=3?1:dots+1;
+},500);
 
 // ===== SOUND =====
 function playClick(){
-    document.getElementById("clickSound").play();
+const s=document.getElementById("clickSound");
+s.currentTime=0;
+s.play().catch(()=>{});
+}
+
+// ===== CHART =====
+function drawPie(lux,status){
+const ctx=document.getElementById("chart").getContext("2d");
+ctx.clearRect(0,0,300,300);
+
+let percent=Math.min(lux/1500,1);
+let angle=percent*Math.PI*2;
+
+ctx.beginPath();
+ctx.arc(150,150,100,0,Math.PI*2);
+ctx.strokeStyle='rgba(255,255,255,0.1)';
+ctx.lineWidth=20;
+ctx.stroke();
+
+ctx.beginPath();
+ctx.arc(150,150,100,-Math.PI/2,-Math.PI/2+angle);
+ctx.strokeStyle=(status==="OK")?"lime":"red";
+ctx.lineWidth=20;
+ctx.lineCap='round';
+ctx.stroke();
+
+ctx.fillStyle='white';
+ctx.font='bold 24px sans-serif';
+ctx.textAlign='center';
+ctx.fillText(Math.round(lux)+' lux',150,150);
 }
 
 // ===== MQTT =====
-const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
-    reconnectPeriod: 1000
-});
+const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
-client.on("connect", () => {
-    console.log("MQTT connected");
+// ===== CONNECTION TRACK =====
+let lastDataTime = 0;
+const TIMEOUT = 3000; // 3s
 
-    client.subscribe("bh1750/lux");
-    client.subscribe("bh1750/led");
+client.on("connect",()=>{
+console.log("MQTT connected");
+client.subscribe("bh1750/lux");
+client.subscribe("bh1750/led");
 });
 
 // ===== RECEIVE =====
-client.on("message", (topic, message) => {
+client.on("message",(topic,message)=>{
 
-    // 🔥 ẨN LOADING khi có dữ liệu
-    document.getElementById("loadingText").style.display = "none";
-    document.getElementById("mainContent").style.display = "block";
+lastDataTime = Date.now();
 
-    // ===== LED =====
-    if(topic === "bh1750/led"){
-        const state = message.toString();
+// hiện dashboard
+document.getElementById("loadingText").style.display="none";
+document.getElementById("mainContent").style.display="block";
 
-        if(state === "ON"){
-            document.getElementById("ledState").innerText = "💡 LED ON";
-        } else {
-            document.getElementById("ledState").innerText = "🌙 LED OFF";
-        }
-        return;
-    }
+// LED
+if(topic==="bh1750/led"){
+document.getElementById("ledState").innerText =
+message.toString()==="ON"?"💡 LED ON":"🌙 LED OFF";
+return;
+}
 
-    // ===== SENSOR =====
-    try {
-        const data = JSON.parse(message.toString());
+// SENSOR
+let data = JSON.parse(message.toString());
 
-        document.getElementById("sensorName").innerText = "🌞 " + data.name;
+document.getElementById("sensorName").innerText="🌞 "+data.name;
+document.getElementById("luxValue").innerText=Math.round(data.lux)+" lux;
 
-        document.getElementById("luxValue").innerText = Math.round(data.lux) + " lux";
+if(data.status==="OK"){
+document.getElementById("statusText").innerText="✔ OK";
+document.querySelector(".dashboard").style.borderColor="lime";
+}else{
+document.getElementById("statusText").innerText="❌ ERROR";
+document.querySelector(".dashboard").style.borderColor="red";
+}
 
-        if (data.status === "OK") {
-            document.getElementById("statusText").innerText = "✔ OK";
-            document.getElementById("statusText").style.color = "lightgreen";
-            document.querySelector(".dashboard").style.borderColor = "lime";
-        } else {
-            document.getElementById("statusText").innerText = "❌ ERROR";
-            document.getElementById("statusText").style.color = "red";
-            document.querySelector(".dashboard").style.borderColor = "red";
-        }
+drawPie(data.lux,data.status);
 
-        drawPie(data.lux, data.status);
-
-    } catch (e) {
-        console.log("JSON error");
-    }
 });
+
+// ===== CHECK DISCONNECT =====
+setInterval(()=>{
+
+if(Date.now() - lastDataTime > TIMEOUT){
+
+document.getElementById("loadingText").style.display="block";
+document.getElementById("mainContent").style.display="none";
+
+}
+
+},1000);
 
 // ===== BUTTON =====
 function turnOn(){
-    client.publish("bh1750/control", "ON");
-    playClick();
+playClick();
+client.publish("bh1750/control","ON");
 }
 
 function turnOff(){
-    client.publish("bh1750/control", "OFF");
-    playClick();
+playClick();
+client.publish("bh1750/control","OFF");
 }
 
-client.on("error", (err) => {
-    console.log("MQTT error:", err);
+client.on("error",(err)=>{
+console.log("MQTT error",err);
 });
 
 </script>
