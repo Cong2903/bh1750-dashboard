@@ -7,130 +7,212 @@
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
-body{
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
     font-family:system-ui;
-    background:#1e3c72;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-    color:white;
 }
-.dashboard{
+
+body{
+    background:#eef2f7;
+    padding:20px;
+}
+
+/* HEADER */
+.header{
+    background:linear-gradient(135deg,#3a6ff7,#5b3df5);
+    color:white;
+    padding:25px;
+    border-radius:20px;
     text-align:center;
+    box-shadow:0 10px 25px rgba(0,0,0,0.2);
+}
+
+.header h1{
+    font-size:28px;
+    margin-bottom:10px;
+}
+
+.info{
+    background:rgba(255,255,255,0.2);
+    padding:10px;
+    border-radius:20px;
+    display:inline-block;
+}
+
+/* CARD */
+.container{
+    margin-top:20px;
+    display:flex;
+    gap:20px;
+    justify-content:center;
+}
+
+.card{
+    background:white;
     padding:20px;
     border-radius:20px;
-    border:3px solid lime;
+    width:250px;
+    box-shadow:0 5px 15px rgba(0,0,0,0.1);
+    text-align:center;
+    position:relative;
 }
-#lux{font-size:50px;}
-button{padding:10px;margin:5px;}
+
+.card h3{
+    margin-bottom:10px;
+    color:#555;
+}
+
+.value{
+    font-size:40px;
+    font-weight:bold;
+    margin:10px 0;
+}
+
+.sensor{
+    color:#888;
+    font-size:14px;
+}
+
+/* màu viền */
+.lux{border-bottom:5px solid #f5c542;}
+.temp{border-bottom:5px solid #ff6b6b;}
+.hum{border-bottom:5px solid #4dabf7;}
+
+/* loading */
+#loading{
+    text-align:center;
+    margin-top:40px;
+    font-size:20px;
+    color:#666;
+}
+
+/* nút */
+.control{
+    text-align:center;
+    margin-top:20px;
+}
+
+button{
+    padding:10px 20px;
+    margin:5px;
+    border:none;
+    border-radius:10px;
+    background:#3a6ff7;
+    color:white;
+    cursor:pointer;
+    font-size:16px;
+}
+
+button:hover{
+    opacity:0.8;
+}
 </style>
+
 </head>
 
 <body>
 
-<div class="dashboard">
+<!-- HEADER -->
+<div class="header">
+    <h1>HỆ THỐNG GIÁM SÁT MÔI TRƯỜNG</h1>
+    <div class="info">
+        Sinh viên: <b>Nguyễn Văn A</b> | MSSV: <b>2026xxxx</b>
+    </div>
+</div>
 
-<div id="loading">Loading...</div>
+<!-- LOADING -->
+<div id="loading">Đang tải dữ liệu...</div>
 
+<!-- MAIN -->
 <div id="main" style="display:none;">
-<h2>BH1750</h2>
 
-<canvas id="chart" width="300" height="300"></canvas>
+    <div class="container">
 
-<div id="lux">--</div>
-<div id="status"></div>
+        <!-- LUX -->
+        <div class="card lux">
+            <h3>Cường Độ Ánh Sáng</h3>
+            <div id="lux" class="value">--</div>
+            <div class="sensor">Cảm biến: BH1750</div>
+        </div>
 
-<button onclick="send('ON')">ON</button>
-<button onclick="send('OFF')">OFF</button>
+        <!-- TEMP -->
+        <div class="card temp">
+            <h3>Nhiệt Độ</h3>
+            <div id="temp" class="value">--</div>
+            <div class="sensor">Cảm biến: DHT11</div>
+        </div>
+
+        <!-- HUM -->
+        <div class="card hum">
+            <h3>Độ Ẩm</h3>
+            <div id="hum" class="value">--</div>
+            <div class="sensor">Cảm biến: DHT11</div>
+        </div>
+
+    </div>
+
+    <!-- CONTROL -->
+    <div class="control">
+        <button onclick="send('ON')">BẬT</button>
+        <button onclick="send('OFF')">TẮT</button>
+        <div id="status"></div>
+    </div>
+
 </div>
-
-</div>
-
 
 <script>
-
-// unlock audio
-document.body.addEventListener("click", ()=>{
- let s=document.getElementById("sound");
- s.play().then(()=>{s.pause();s.currentTime=0;});
-},{once:true});
-
-// sound
-function clickSound(){
- let s=document.getElementById("sound");
- s.currentTime=0;
- s.play().catch(()=>{});
-}
-
-// chart
-function draw(lux){
- let ctx=document.getElementById("chart").getContext("2d");
- ctx.clearRect(0,0,300,300);
-
- let p=Math.min(lux/300,1);
- let a=p*Math.PI*2;
-
- ctx.beginPath();
- ctx.arc(150,150,100,0,Math.PI*2);
- ctx.strokeStyle='gray';
- ctx.lineWidth=20;
- ctx.stroke();
-
- ctx.beginPath();
- ctx.arc(150,150,100,-Math.PI/2,-Math.PI/2+a);
- ctx.strokeStyle='lime';
- ctx.lineWidth=20;
- ctx.stroke();
-}
 
 // MQTT
 const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
 
-let last=0;
+let last = 0;
 
 client.on("connect",()=>{
- client.subscribe("bh1750/lux");
- client.subscribe("bh1750/led");
+    client.subscribe("bh1750/lux");
+    client.subscribe("bh1750/led");
 });
 
+// nhận dữ liệu
 client.on("message",(t,m)=>{
 
- last=Date.now();
+    last = Date.now();
 
- document.getElementById("loading").style.display="none";
- document.getElementById("main").style.display="block";
+    document.getElementById("loading").style.display="none";
+    document.getElementById("main").style.display="block";
 
- if(t==="bh1750/lux"){
-  let data=JSON.parse(m.toString());
+    if(t==="bh1750/lux"){
+        let data = JSON.parse(m.toString());
 
-  if(data.status==="ERROR"){
-    document.getElementById("lux").innerText="ERROR";
-    document.getElementById("status").innerText="Sensor lỗi";
-    return;
-  }
+        if(data.status==="ERROR"){
+            document.getElementById("lux").innerText="ERROR";
+            return;
+        }
 
-  document.getElementById("lux").innerText=data.lux+" lux";
-  draw(data.lux);
- }
+        document.getElementById("lux").innerText = data.lux + " lux";
 
- if(t==="bh1750/led"){
-  document.getElementById("status").innerText=m.toString();
- }
+        // fake thêm temp + hum (nếu bạn chưa gửi)
+        document.getElementById("temp").innerText = data.temp ? data.temp+" °C" : "--";
+        document.getElementById("hum").innerText = data.hum ? data.hum+" %" : "--";
+    }
+
+    if(t==="bh1750/led"){
+        document.getElementById("status").innerText = "LED: " + m.toString();
+    }
 });
 
-// mất kết nối
+// mất kết nối → loading
 setInterval(()=>{
- if(Date.now()-last>5000){
-  document.getElementById("loading").style.display="block";
-  document.getElementById("main").style.display="none";
- }
+    if(Date.now() - last > 5000){
+        document.getElementById("loading").style.display="block";
+        document.getElementById("main").style.display="none";
+    }
 },1000);
 
-// send
+// gửi lệnh
 function send(cmd){
- clickSound();
- client.publish("bh1750/control",cmd);
+    client.publish("bh1750/control",cmd);
 }
 
 </script>
