@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BH1750 Dashboard</title>
+<title>Smart IoT Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
@@ -19,20 +19,21 @@ body{
     color:white;
 }
 
-/* ===== CARD ===== */
 .dashboard{
     text-align:center;
     background: rgba(255,255,255,0.05);
     padding: 30px 20px;
-
     border-radius: 30px;
     border: 3px solid lime;
-
     box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-
     backdrop-filter: blur(10px);
-
     width: 320px;
+}
+
+/* ===== LOADING ===== */
+#loadingText{
+    font-size:24px;
+    margin:60px 0;
 }
 
 /* ===== TEXT ===== */
@@ -44,6 +45,11 @@ body{
 
 #statusText{
     font-size:20px;
+    margin-top:10px;
+}
+
+#ledState{
+    font-size:18px;
     margin-top:10px;
 }
 
@@ -85,21 +91,47 @@ button:active{
 <body>
 
 <div class="dashboard">
-    <h2 id="sensorName">🌞 Loading...</h2>
 
-    <canvas id="chart" width="300" height="300"></canvas>
+    <!-- LOADING -->
+    <div id="loadingText">Loading.</div>
 
-    <div id="luxValue">-- lux</div>
+    <!-- DASHBOARD -->
+    <div id="mainContent" style="display:none;">
 
-    <div id="statusText">...</div>
+        <h2 id="sensorName">🌞</h2>
 
-    <div class="button-group">
-        <button class="btn-on" onclick="turnOn()">ON</button>
-        <button class="btn-off" onclick="turnOff()">OFF</button>
+        <canvas id="chart" width="300" height="300"></canvas>
+
+        <div id="luxValue">-- lux</div>
+
+        <div id="statusText">...</div>
+
+        <div id="ledState">💡 LED OFF</div>
+
+        <div class="button-group">
+            <button class="btn-on" onclick="turnOn()">ON</button>
+            <button class="btn-off" onclick="turnOff()">OFF</button>
+        </div>
+
     </div>
+
 </div>
 
+<!-- 🔊 SOUND -->
+<audio id="clickSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+
 <script>
+
+// ===== LOADING ANIMATION =====
+let dots = 1;
+
+setInterval(() => {
+    let text = "Loading" + ".".repeat(dots);
+    document.getElementById("loadingText").innerText = text;
+
+    dots++;
+    if(dots > 3) dots = 1;
+}, 500);
 
 // ===== DRAW CHART =====
 function drawPie(lux, status){
@@ -131,20 +163,43 @@ function drawPie(lux, status){
     ctx.fillText(Math.round(lux)+' lux',cx,cy);
 }
 
-// ===== MQTT CONNECT =====
+// ===== SOUND =====
+function playClick(){
+    document.getElementById("clickSound").play();
+}
+
+// ===== MQTT =====
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
     reconnectPeriod: 1000
 });
 
-// ===== CONNECT =====
 client.on("connect", () => {
     console.log("MQTT connected");
+
     client.subscribe("bh1750/lux");
+    client.subscribe("bh1750/led");
 });
 
-// ===== RECEIVE DATA =====
+// ===== RECEIVE =====
 client.on("message", (topic, message) => {
 
+    // 🔥 ẨN LOADING khi có dữ liệu
+    document.getElementById("loadingText").style.display = "none";
+    document.getElementById("mainContent").style.display = "block";
+
+    // ===== LED =====
+    if(topic === "bh1750/led"){
+        const state = message.toString();
+
+        if(state === "ON"){
+            document.getElementById("ledState").innerText = "💡 LED ON";
+        } else {
+            document.getElementById("ledState").innerText = "🌙 LED OFF";
+        }
+        return;
+    }
+
+    // ===== SENSOR =====
     try {
         const data = JSON.parse(message.toString());
 
@@ -169,18 +224,17 @@ client.on("message", (topic, message) => {
     }
 });
 
-// ===== BUTTON CONTROL =====
+// ===== BUTTON =====
 function turnOn(){
     client.publish("bh1750/control", "ON");
-    console.log("Send ON");
+    playClick();
 }
 
 function turnOff(){
     client.publish("bh1750/control", "OFF");
-    console.log("Send OFF");
+    playClick();
 }
 
-// ===== ERROR =====
 client.on("error", (err) => {
     console.log("MQTT error:", err);
 });
