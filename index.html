@@ -15,23 +15,69 @@ body{
     justify-content:center;
     align-items:center;
     height:100vh;
+    margin:0;
     color:white;
 }
+
+/* ===== CARD ===== */
 .dashboard{
     text-align:center;
+    background: rgba(255,255,255,0.05);
+    padding: 30px 20px;
+
+    border-radius: 30px;
+    border: 3px solid lime;
+
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+
+    backdrop-filter: blur(10px);
+
+    width: 320px;
 }
-canvas{
-    display:block;
-    margin:auto;
-}
+
+/* ===== TEXT ===== */
 #luxValue{
     font-size:60px;
     font-weight:bold;
     margin-top:20px;
 }
+
 #statusText{
     font-size:20px;
     margin-top:10px;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+}
+
+/* ===== BUTTON ===== */
+.button-group{
+    margin-top:20px;
+}
+
+button{
+    margin:10px;
+    padding:12px 25px;
+    border:none;
+    border-radius:12px;
+    font-size:18px;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+button:active{
+    transform:scale(0.95);
+}
+
+.btn-on{
+    background:lime;
+}
+
+.btn-off{
+    background:red;
+    color:white;
 }
 </style>
 </head>
@@ -46,6 +92,11 @@ canvas{
     <div id="luxValue">-- lux</div>
 
     <div id="statusText">...</div>
+
+    <div class="button-group">
+        <button class="btn-on" onclick="turnOn()">ON</button>
+        <button class="btn-off" onclick="turnOff()">OFF</button>
+    </div>
 </div>
 
 <script>
@@ -59,14 +110,12 @@ function drawPie(lux, status){
     const percent=Math.min(lux/1500,1);
     const angle=percent*Math.PI*2;
 
-    // nền
     ctx.beginPath();
     ctx.arc(cx,cy,r,0,Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.1)';
     ctx.lineWidth=20;
     ctx.stroke();
 
-    // màu theo trạng thái
     let color = (status === "OK") ? "lime" : "red";
 
     ctx.beginPath();
@@ -76,44 +125,43 @@ function drawPie(lux, status){
     ctx.lineCap='round';
     ctx.stroke();
 
-    // text giữa
     ctx.fillStyle='white';
     ctx.font='bold 24px sans-serif';
     ctx.textAlign='center';
     ctx.fillText(Math.round(lux)+' lux',cx,cy);
 }
 
-// ===== MQTT =====
+// ===== MQTT CONNECT =====
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
     reconnectPeriod: 1000
 });
 
+// ===== CONNECT =====
 client.on("connect", () => {
     console.log("MQTT connected");
     client.subscribe("bh1750/lux");
 });
 
+// ===== RECEIVE DATA =====
 client.on("message", (topic, message) => {
 
     try {
         const data = JSON.parse(message.toString());
 
-        // tên sensor
         document.getElementById("sensorName").innerText = "🌞 " + data.name;
 
-        // giá trị lux (TO bên dưới)
         document.getElementById("luxValue").innerText = Math.round(data.lux) + " lux";
 
-        // trạng thái
         if (data.status === "OK") {
             document.getElementById("statusText").innerText = "✔ OK";
             document.getElementById("statusText").style.color = "lightgreen";
+            document.querySelector(".dashboard").style.borderColor = "lime";
         } else {
             document.getElementById("statusText").innerText = "❌ ERROR";
             document.getElementById("statusText").style.color = "red";
+            document.querySelector(".dashboard").style.borderColor = "red";
         }
 
-        // vẽ chart
         drawPie(data.lux, data.status);
 
     } catch (e) {
@@ -121,6 +169,18 @@ client.on("message", (topic, message) => {
     }
 });
 
+// ===== BUTTON CONTROL =====
+function turnOn(){
+    client.publish("bh1750/control", "ON");
+    console.log("Send ON");
+}
+
+function turnOff(){
+    client.publish("bh1750/control", "OFF");
+    console.log("Send OFF");
+}
+
+// ===== ERROR =====
 client.on("error", (err) => {
     console.log("MQTT error:", err);
 });
