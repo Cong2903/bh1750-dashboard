@@ -2,28 +2,44 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>IoT Dashboard</title>
+<title>Smart IoT Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
 body{
     font-family:system-ui;
-    background:#1e3c72;
+    background:linear-gradient(135deg,#1e3c72,#2a5298);
     display:flex;
     justify-content:center;
     align-items:center;
     height:100vh;
     color:white;
 }
+
 .dashboard{
     text-align:center;
-    padding:20px;
-    border-radius:20px;
-    border:3px solid lime;
+    background: rgba(255,255,255,0.05);
+    padding: 30px;
+    border-radius: 30px;
+    border: 3px solid lime;
+    width: 320px;
 }
-#lux{font-size:50px;}
-button{padding:10px;margin:5px;}
+
+#value{
+    font-size:50px;
+    margin:15px;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+}
+
+button{
+    padding:10px;
+    margin:5px;
+}
 </style>
 </head>
 
@@ -34,15 +50,17 @@ button{padding:10px;margin:5px;}
 <div id="loading">Loading...</div>
 
 <div id="main" style="display:none;">
-<h2>BH1750</h2>
+
+<h2 id="sensorName">---</h2>
 
 <canvas id="chart" width="300" height="300"></canvas>
 
-<div id="lux">--</div>
+<div id="value">--</div>
 <div id="status"></div>
 
 <button onclick="send('ON')">ON</button>
 <button onclick="send('OFF')">OFF</button>
+
 </div>
 
 </div>
@@ -65,11 +83,11 @@ function clickSound(){
 }
 
 // chart
-function draw(lux){
+function draw(value){
  let ctx=document.getElementById("chart").getContext("2d");
  ctx.clearRect(0,0,300,300);
 
- let p=Math.min(lux/1500,1);
+ let p=Math.min(value/1500,1);
  let a=p*Math.PI*2;
 
  ctx.beginPath();
@@ -91,7 +109,7 @@ const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
 let last=0;
 
 client.on("connect",()=>{
- client.subscribe("bh1750/lux");
+ client.subscribe("sensor/data");
  client.subscribe("bh1750/led");
 });
 
@@ -102,21 +120,27 @@ client.on("message",(t,m)=>{
  document.getElementById("loading").style.display="none";
  document.getElementById("main").style.display="block";
 
- if(t==="bh1750/lux"){
+ if(t==="sensor/data"){
+
   let data=JSON.parse(m.toString());
 
+  document.getElementById("sensorName").innerText="🌐 "+data.name;
+
   if(data.status==="ERROR"){
-    document.getElementById("lux").innerText="ERROR";
-    document.getElementById("status").innerText="Sensor lỗi";
+    document.getElementById("value").innerText="ERROR";
+    document.getElementById("status").innerText="❌ Sensor lỗi";
     return;
   }
 
-  document.getElementById("lux").innerText=data.lux+" lux";
-  draw(data.lux);
+  document.getElementById("value").innerText =
+    Math.round(data.value)+" "+data.unit;
+
+  draw(data.value);
  }
 
  if(t==="bh1750/led"){
-  document.getElementById("status").innerText=m.toString();
+  document.getElementById("status").innerText =
+    m.toString()==="ON"?"💡 LED ON":"🌙 LED OFF";
  }
 });
 
