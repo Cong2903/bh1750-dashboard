@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BH1750 MQTT Dashboard</title>
+<title>BH1750 Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
@@ -27,6 +27,11 @@ canvas{
 #luxValue{
     font-size:60px;
     font-weight:bold;
+    margin-top:20px;
+}
+#statusText{
+    font-size:20px;
+    margin-top:10px;
 }
 </style>
 </head>
@@ -34,14 +39,19 @@ canvas{
 <body>
 
 <div class="dashboard">
-    <h2>🌞 BH1750 MQTT</h2>
+    <h2 id="sensorName">🌞 Loading...</h2>
+
     <canvas id="chart" width="300" height="300"></canvas>
+
     <div id="luxValue">-- lux</div>
+
+    <div id="statusText">...</div>
 </div>
 
 <script>
+
 // ===== DRAW CHART =====
-function drawPie(lux){
+function drawPie(lux, status){
     const ctx = document.getElementById("chart").getContext("2d");
     ctx.clearRect(0,0,300,300);
 
@@ -49,19 +59,24 @@ function drawPie(lux){
     const percent=Math.min(lux/1500,1);
     const angle=percent*Math.PI*2;
 
+    // nền
     ctx.beginPath();
     ctx.arc(cx,cy,r,0,Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.1)';
     ctx.lineWidth=20;
     ctx.stroke();
 
+    // màu theo trạng thái
+    let color = (status === "OK") ? "lime" : "red";
+
     ctx.beginPath();
     ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+angle);
-    ctx.strokeStyle='lime';
+    ctx.strokeStyle=color;
     ctx.lineWidth=20;
     ctx.lineCap='round';
     ctx.stroke();
 
+    // text giữa
     ctx.fillStyle='white';
     ctx.font='bold 24px sans-serif';
     ctx.textAlign='center';
@@ -79,18 +94,37 @@ client.on("connect", () => {
 });
 
 client.on("message", (topic, message) => {
-    console.log("DATA:", message.toString());
 
-    const lux = parseFloat(message.toString());
+    try {
+        const data = JSON.parse(message.toString());
 
-    document.getElementById("luxValue").innerText = Math.round(lux) + " lux";
+        // tên sensor
+        document.getElementById("sensorName").innerText = "🌞 " + data.name;
 
-    drawPie(lux);
+        // giá trị lux (TO bên dưới)
+        document.getElementById("luxValue").innerText = Math.round(data.lux) + " lux";
+
+        // trạng thái
+        if (data.status === "OK") {
+            document.getElementById("statusText").innerText = "✔ OK";
+            document.getElementById("statusText").style.color = "lightgreen";
+        } else {
+            document.getElementById("statusText").innerText = "❌ ERROR";
+            document.getElementById("statusText").style.color = "red";
+        }
+
+        // vẽ chart
+        drawPie(data.lux, data.status);
+
+    } catch (e) {
+        console.log("JSON error");
+    }
 });
 
 client.on("error", (err) => {
     console.log("MQTT error:", err);
 });
+
 </script>
 
 </body>
