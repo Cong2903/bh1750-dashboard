@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RGB IoT Dashboard</title>
+<title>IoT Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
@@ -22,26 +22,25 @@ body{
 .dashboard{
     text-align:center;
     background: rgba(255,255,255,0.05);
-    padding: 30px 20px;
+    padding: 30px;
     border-radius: 30px;
     border: 3px solid lime;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-    backdrop-filter: blur(10px);
     width: 320px;
 }
 
 #loadingText{
     font-size:24px;
-    margin:60px 0;
+    margin:50px 0;
 }
 
-#status{
-    margin-top:10px;
-    font-size:18px;
+#lux{
+    font-size:50px;
+    font-weight:bold;
+    margin:20px 0;
 }
 
 button{
-    margin:10px;
+    margin:8px;
     padding:12px 20px;
     border:none;
     border-radius:12px;
@@ -49,12 +48,8 @@ button{
     cursor:pointer;
 }
 
-/* màu */
 .on{background:lime;}
 .off{background:red;color:white;}
-.red{background:red;}
-.green{background:green;}
-.blue{background:blue;color:white;}
 </style>
 </head>
 
@@ -66,18 +61,13 @@ button{
 
 <div id="mainContent" style="display:none;">
 
-<h2>🎨 RGB Control</h2>
+<h2>🌞 BH1750 + RGB</h2>
 
+<div id="lux">-- lux</div>
 <div id="status">Disconnected</div>
 
 <button class="on" onclick="sendCmd('ON')">ON</button>
 <button class="off" onclick="sendCmd('OFF')">OFF</button>
-
-<br>
-
-<button class="red" onclick="sendCmd('RED')">RED</button>
-<button class="green" onclick="sendCmd('GREEN')">GREEN</button>
-<button class="blue" onclick="sendCmd('BLUE')">BLUE</button>
 
 </div>
 
@@ -118,6 +108,7 @@ client.on("connect",()=>{
 
     document.getElementById("status").innerText = "🟢 Connected";
 
+    client.subscribe("bh1750/lux");
     client.subscribe("bh1750/led");
 });
 
@@ -129,15 +120,31 @@ client.on("message",(topic,message)=>{
     document.getElementById("loadingText").style.display="none";
     document.getElementById("mainContent").style.display="block";
 
-    if(topic==="bh1750/led"){
+    // ===== LUX =====
+    if(topic === "bh1750/lux"){
+        try{
+            let data = JSON.parse(message.toString());
+
+            let lux = data.lux || 0;
+
+            document.getElementById("lux").innerText =
+            Math.round(lux) + " lux";
+
+        }catch(e){
+            console.log("JSON lỗi");
+        }
+    }
+
+    // ===== LED =====
+    if(topic === "bh1750/led"){
         let state = message.toString();
 
         document.getElementById("status").innerText =
-        state==="ON"?"💡 RGB ON":"🌙 RGB OFF";
+        state === "ON" ? "💡 RGB ON" : "🌙 RGB OFF";
     }
 });
 
-// ===== DISCONNECT CHECK =====
+// ===== DISCONNECT =====
 setInterval(()=>{
     if(Date.now() - lastDataTime > TIMEOUT){
         document.getElementById("loadingText").style.display="block";
