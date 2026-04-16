@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart IoT Dashboard</title>
+<title>RGB IoT Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
@@ -35,36 +35,26 @@ body{
     margin:60px 0;
 }
 
-#luxValue{
-    font-size:60px;
-    font-weight:bold;
-}
-
-#statusText{
-    font-size:20px;
+#status{
     margin-top:10px;
-}
-
-#ledState{
-    margin-top:10px;
-}
-
-canvas{
-    display:block;
-    margin:auto;
+    font-size:18px;
 }
 
 button{
     margin:10px;
-    padding:12px 25px;
+    padding:12px 20px;
     border:none;
     border-radius:12px;
-    font-size:18px;
+    font-size:16px;
     cursor:pointer;
 }
 
-.btn-on{ background:lime; }
-.btn-off{ background:red; color:white; }
+/* màu */
+.on{background:lime;}
+.off{background:red;color:white;}
+.red{background:red;}
+.green{background:green;}
+.blue{background:blue;color:white;}
 </style>
 </head>
 
@@ -76,16 +66,18 @@ button{
 
 <div id="mainContent" style="display:none;">
 
-<h2 id="sensorName">🌞</h2>
+<h2>🎨 RGB Control</h2>
 
-<canvas id="chart" width="300" height="300"></canvas>
+<div id="status">Disconnected</div>
 
-<div id="luxValue">-- lux</div>
-<div id="statusText">...</div>
-<div id="ledState">💡 LED OFF</div>
+<button class="on" onclick="sendCmd('ON')">ON</button>
+<button class="off" onclick="sendCmd('OFF')">OFF</button>
 
-<button class="btn-on" onclick="turnOn()">ON</button>
-<button class="btn-off" onclick="turnOff()">OFF</button>
+<br>
+
+<button class="red" onclick="sendCmd('RED')">RED</button>
+<button class="green" onclick="sendCmd('GREEN')">GREEN</button>
+<button class="blue" onclick="sendCmd('BLUE')">BLUE</button>
 
 </div>
 
@@ -95,7 +87,7 @@ button{
 
 <script>
 
-// ===== LOADING ANIMATION =====
+// ===== LOADING =====
 let dots = 1;
 setInterval(()=>{
     document.getElementById("loadingText").innerText =
@@ -105,52 +97,27 @@ setInterval(()=>{
 
 // ===== SOUND =====
 function playClick(){
-    const s=document.getElementById("clickSound");
-    s.currentTime=0;
-    s.play().catch(()=>console.log("🔇 blocked"));
-}
-
-// ===== DRAW CHART =====
-function drawPie(lux,status){
-    const ctx=document.getElementById("chart").getContext("2d");
-    ctx.clearRect(0,0,300,300);
-
-    let percent=Math.min(lux/1500,1);
-    let angle=percent*Math.PI*2;
-
-    ctx.beginPath();
-    ctx.arc(150,150,100,0,Math.PI*2);
-    ctx.strokeStyle='rgba(255,255,255,0.1)';
-    ctx.lineWidth=20;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(150,150,100,-Math.PI/2,-Math.PI/2+angle);
-    ctx.strokeStyle=(status==="OK")?"lime":"red";
-    ctx.lineWidth=20;
-    ctx.lineCap='round';
-    ctx.stroke();
-
-    ctx.fillStyle='white';
-    ctx.font='bold 24px sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText(Math.round(lux)+' lux',150,150);
+    const s = document.getElementById("clickSound");
+    s.currentTime = 0;
+    s.play().catch(()=>{});
 }
 
 // ===== MQTT =====
-const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+    reconnectPeriod: 1000
+});
 
-// ===== CONNECTION TRACK =====
 let lastDataTime = 0;
-const TIMEOUT = 3000;
+const TIMEOUT = 5000;
 
 // ===== CONNECT =====
 client.on("connect",()=>{
     console.log("MQTT connected");
 
-    lastDataTime = Date.now(); // FIX
+    lastDataTime = Date.now();
 
-    client.subscribe("bh1750/lux");
+    document.getElementById("status").innerText = "🟢 Connected";
+
     client.subscribe("bh1750/led");
 });
 
@@ -162,42 +129,15 @@ client.on("message",(topic,message)=>{
     document.getElementById("loadingText").style.display="none";
     document.getElementById("mainContent").style.display="block";
 
-    // ===== LED =====
     if(topic==="bh1750/led"){
-        const state = message.toString();
+        let state = message.toString();
 
-        document.getElementById("ledState").innerText =
-        state==="ON"?"💡 LED ON":"🌙 LED OFF";
-
-        return;
+        document.getElementById("status").innerText =
+        state==="ON"?"💡 RGB ON":"🌙 RGB OFF";
     }
-
-    // ===== SENSOR =====
-    let data;
-    try{
-        data = JSON.parse(message.toString());
-    }catch(e){
-        console.log("JSON lỗi");
-        return;
-    }
-
-    const lux = data.lux || 0;
-
-    document.getElementById("sensorName").innerText="🌞 "+(data.name||"Sensor");
-    document.getElementById("luxValue").innerText=Math.round(lux)+" lux";
-
-    if(data.status==="OK"){
-        document.getElementById("statusText").innerText="✔ OK";
-        document.querySelector(".dashboard").style.borderColor="lime";
-    }else{
-        document.getElementById("statusText").innerText="❌ ERROR";
-        document.querySelector(".dashboard").style.borderColor="red";
-    }
-
-    drawPie(lux,data.status);
 });
 
-// ===== CHECK DISCONNECT =====
+// ===== DISCONNECT CHECK =====
 setInterval(()=>{
     if(Date.now() - lastDataTime > TIMEOUT){
         document.getElementById("loadingText").style.display="block";
@@ -206,20 +146,24 @@ setInterval(()=>{
 },1000);
 
 // ===== BUTTON =====
-function turnOn(){
+function sendCmd(cmd){
     playClick();
-    client.publish("bh1750/control","ON");
-}
-
-function turnOff(){
-    playClick();
-    client.publish("bh1750/control","OFF");
+    client.publish("bh1750/control", cmd);
 }
 
 // ===== DEBUG =====
-client.on("offline", ()=>console.log("MQTT offline"));
-client.on("reconnect", ()=>console.log("MQTT reconnecting..."));
-client.on("error", (err)=>console.log("MQTT error",err));
+client.on("offline", ()=>{
+    console.log("MQTT offline");
+    document.getElementById("status").innerText = "🔴 Offline";
+});
+
+client.on("reconnect", ()=>{
+    console.log("Reconnecting...");
+});
+
+client.on("error", err=>{
+    console.log("Error",err);
+});
 
 </script>
 
