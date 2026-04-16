@@ -19,7 +19,6 @@ body{
     padding:20px;
 }
 
-/* HEADER */
 .header{
     background:linear-gradient(135deg,#3a6ff7,#5b3df5);
     color:white;
@@ -29,19 +28,6 @@ body{
     box-shadow:0 10px 25px rgba(0,0,0,0.2);
 }
 
-.header h1{
-    font-size:28px;
-    margin-bottom:10px;
-}
-
-.info{
-    background:rgba(255,255,255,0.2);
-    padding:10px;
-    border-radius:20px;
-    display:inline-block;
-}
-
-/* CARD */
 .container{
     margin-top:20px;
     display:flex;
@@ -56,39 +42,22 @@ body{
     width:250px;
     box-shadow:0 5px 15px rgba(0,0,0,0.1);
     text-align:center;
-    position:relative;
-}
-
-.card h3{
-    margin-bottom:10px;
-    color:#555;
 }
 
 .value{
     font-size:40px;
     font-weight:bold;
-    margin:10px 0;
 }
 
-.sensor{
-    color:#888;
-    font-size:14px;
-}
-
-/* màu viền */
 .lux{border-bottom:5px solid #f5c542;}
 .temp{border-bottom:5px solid #ff6b6b;}
 .hum{border-bottom:5px solid #4dabf7;}
 
-/* loading */
 #loading{
     text-align:center;
     margin-top:40px;
-    font-size:20px;
-    color:#666;
 }
 
-/* nút */
 .control{
     text-align:center;
     margin-top:20px;
@@ -102,63 +71,45 @@ button{
     background:#3a6ff7;
     color:white;
     cursor:pointer;
-    font-size:16px;
-}
-
-button:hover{
-    opacity:0.8;
 }
 </style>
-
 </head>
 
 <body>
 
-<!-- HEADER -->
 <div class="header">
     <h1>HỆ THỐNG GIÁM SÁT MÔI TRƯỜNG</h1>
-    <div class="info">
-        Sinh viên: <b>Nguyễn Văn A</b> | MSSV: <b>2026xxxx</b>
-    </div>
+    <div>Nguyễn Văn A - 2026xxxx</div>
 </div>
 
-<!-- LOADING -->
 <div id="loading">Đang tải dữ liệu...</div>
 
-<!-- MAIN -->
 <div id="main" style="display:none;">
 
-    <div class="container">
+<div class="container">
 
-        <!-- LUX -->
-        <div class="card lux">
-            <h3>Cường Độ Ánh Sáng</h3>
-            <div id="lux" class="value">--</div>
-            <div class="sensor">Cảm biến: BH1750</div>
-        </div>
+<div class="card lux">
+<h3>Cường Độ Ánh Sáng</h3>
+<div id="lux" class="value">--</div>
+</div>
 
-        <!-- TEMP -->
-        <div class="card temp">
-            <h3>Nhiệt Độ</h3>
-            <div id="temp" class="value">--</div>
-            <div class="sensor">Cảm biến: DHT11</div>
-        </div>
+<div class="card temp">
+<h3>Nhiệt Độ</h3>
+<div id="temp" class="value">--</div>
+</div>
 
-        <!-- HUM -->
-        <div class="card hum">
-            <h3>Độ Ẩm</h3>
-            <div id="hum" class="value">--</div>
-            <div class="sensor">Cảm biến: DHT11</div>
-        </div>
+<div class="card hum">
+<h3>Độ Ẩm</h3>
+<div id="hum" class="value">--</div>
+</div>
 
-    </div>
+</div>
 
-    <!-- CONTROL -->
-    <div class="control">
-        <button onclick="send('ON')">BẬT</button>
-        <button onclick="send('OFF')">TẮT</button>
-        <div id="status"></div>
-    </div>
+<div class="control">
+<button onclick="send('ON')">BẬT</button>
+<button onclick="send('OFF')">TẮT</button>
+<div id="status"></div>
+</div>
 
 </div>
 
@@ -169,48 +120,75 @@ const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
 
 let last = 0;
 
+// DOM
+let luxEl = document.getElementById("lux");
+let tempEl = document.getElementById("temp");
+let humEl = document.getElementById("hum");
+let loadingEl = document.getElementById("loading");
+let mainEl = document.getElementById("main");
+let statusEl = document.getElementById("status");
+
+// CONNECT
 client.on("connect",()=>{
+    console.log("MQTT OK");
     client.subscribe("bh1750/lux");
     client.subscribe("bh1750/led");
 });
 
-// nhận dữ liệu
+// RECEIVE
 client.on("message",(t,m)=>{
 
     last = Date.now();
 
-    document.getElementById("loading").style.display="none";
-    document.getElementById("main").style.display="block";
+    loadingEl.style.display="none";
+    mainEl.style.display="block";
 
     if(t==="bh1750/lux"){
+
         let data = JSON.parse(m.toString());
 
-        if(data.status==="ERROR"){
-            document.getElementById("lux").innerText="ERROR";
-            return;
+        // ===== LUX =====
+        if(data.lux === null || data.lux_status === "ERROR"){
+            luxEl.innerText = "ERROR";
+            luxEl.style.color = "red";
+        }else{
+            luxEl.innerText = data.lux + " lux";
+            luxEl.style.color = "black";
         }
 
-        document.getElementById("lux").innerText = data.lux + " lux";
+        // ===== TEMP =====
+        if(data.temp_status === "ERROR"){
+            tempEl.innerText = "ERROR";
+            tempEl.style.color = "red";
+        }else{
+            tempEl.innerText = data.temp + " °C";
+            tempEl.style.color = "black";
+        }
 
-        // fake thêm temp + hum (nếu bạn chưa gửi)
-        document.getElementById("temp").innerText = data.temp ? data.temp+" °C" : "--";
-        document.getElementById("hum").innerText = data.hum ? data.hum+" %" : "--";
+        // ===== HUM =====
+        if(data.hum_status === "ERROR"){
+            humEl.innerText = "ERROR";
+            humEl.style.color = "red";
+        }else{
+            humEl.innerText = data.hum + " %";
+            humEl.style.color = "black";
+        }
     }
 
     if(t==="bh1750/led"){
-        document.getElementById("status").innerText = "LED: " + m.toString();
+        statusEl.innerText = "LED: " + m.toString();
     }
 });
 
-// mất kết nối → loading
+// mất dữ liệu
 setInterval(()=>{
     if(Date.now() - last > 5000){
-        document.getElementById("loading").style.display="block";
-        document.getElementById("main").style.display="none";
+        loadingEl.style.display="block";
+        mainEl.style.display="none";
     }
 },1000);
 
-// gửi lệnh
+// SEND
 function send(cmd){
     client.publish("bh1750/control",cmd);
 }
