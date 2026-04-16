@@ -2,7 +2,6 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IoT Dashboard</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -10,46 +9,21 @@
 <style>
 body{
     font-family:system-ui;
-    background:linear-gradient(135deg,#1e3c72,#2a5298);
+    background:#1e3c72;
     display:flex;
     justify-content:center;
     align-items:center;
     height:100vh;
-    margin:0;
     color:white;
 }
-
 .dashboard{
     text-align:center;
-    background: rgba(255,255,255,0.05);
-    padding: 30px;
-    border-radius: 30px;
-    border: 3px solid lime;
-    width: 320px;
+    padding:20px;
+    border-radius:20px;
+    border:3px solid lime;
 }
-
-#loadingText{
-    font-size:24px;
-    margin:50px 0;
-}
-
-#lux{
-    font-size:50px;
-    font-weight:bold;
-    margin:20px 0;
-}
-
-button{
-    margin:8px;
-    padding:12px 20px;
-    border:none;
-    border-radius:12px;
-    font-size:16px;
-    cursor:pointer;
-}
-
-.on{background:lime;}
-.off{background:red;color:white;}
+#lux{font-size:50px;}
+button{padding:10px;margin:5px;}
 </style>
 </head>
 
@@ -57,120 +31,108 @@ button{
 
 <div class="dashboard">
 
-<div id="loadingText">Loading.</div>
+<div id="loading">Loading...</div>
 
-<div id="mainContent" style="display:none;">
+<div id="main" style="display:none;">
+<h2>BH1750</h2>
 
-<h2>🌞 BH1750 + RGB</h2>
+<canvas id="chart" width="300" height="300"></canvas>
 
-<div id="lux">-- lux</div>
-<div id="status">Disconnected</div>
+<div id="lux">--</div>
+<div id="status"></div>
 
-<button class="on" onclick="sendCmd('ON')">ON</button>
-<button class="off" onclick="sendCmd('OFF')">OFF</button>
-
+<button onclick="send('ON')">ON</button>
+<button onclick="send('OFF')">OFF</button>
 </div>
 
 </div>
 
-<audio id="clickSound" src="https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3"></audio>
+<audio id="sound" src="https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3"></audio>
 
 <script>
 
-// ===== LOADING =====
-let dots = 1;
-setInterval(()=>{
-    document.getElementById("loadingText").innerText =
-    "Loading"+".".repeat(dots);
-    dots = dots>=3?1:dots+1;
-},500);
+// unlock audio
+document.body.addEventListener("click", ()=>{
+ let s=document.getElementById("sound");
+ s.play().then(()=>{s.pause();s.currentTime=0;});
+},{once:true});
 
-// ===== SOUND =====
-function playClick(){
-    const s = document.getElementById("clickSound");
-    s.currentTime = 0;
-    s.play().catch(()=>{});
+// sound
+function clickSound(){
+ let s=document.getElementById("sound");
+ s.currentTime=0;
+ s.play().catch(()=>{});
 }
 
-// ===== MQTT =====
-const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
-    reconnectPeriod: 1000
-});
+// chart
+function draw(lux){
+ let ctx=document.getElementById("chart").getContext("2d");
+ ctx.clearRect(0,0,300,300);
 
-let lastDataTime = 0;
-const TIMEOUT = 5000;
+ let p=Math.min(lux/1500,1);
+ let a=p*Math.PI*2;
 
-// ===== CONNECT =====
+ ctx.beginPath();
+ ctx.arc(150,150,100,0,Math.PI*2);
+ ctx.strokeStyle='gray';
+ ctx.lineWidth=20;
+ ctx.stroke();
+
+ ctx.beginPath();
+ ctx.arc(150,150,100,-Math.PI/2,-Math.PI/2+a);
+ ctx.strokeStyle='lime';
+ ctx.lineWidth=20;
+ ctx.stroke();
+}
+
+// MQTT
+const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+
+let last=0;
+
 client.on("connect",()=>{
-    console.log("MQTT connected");
-
-    lastDataTime = Date.now();
-
-    document.getElementById("status").innerText = "🟢 Connected";
-
-    client.subscribe("bh1750/lux");
-    client.subscribe("bh1750/led");
+ client.subscribe("bh1750/lux");
+ client.subscribe("bh1750/led");
 });
 
-// ===== RECEIVE =====
-client.on("message",(topic,message)=>{
+client.on("message",(t,m)=>{
 
-    lastDataTime = Date.now();
+ last=Date.now();
 
-    document.getElementById("loadingText").style.display="none";
-    document.getElementById("mainContent").style.display="block";
+ document.getElementById("loading").style.display="none";
+ document.getElementById("main").style.display="block";
 
-    // ===== LUX =====
-    if(topic === "bh1750/lux"){
-        try{
-            let data = JSON.parse(message.toString());
+ if(t==="bh1750/lux"){
+  let data=JSON.parse(m.toString());
 
-            let lux = data.lux || 0;
+  if(data.status==="ERROR"){
+    document.getElementById("lux").innerText="ERROR";
+    document.getElementById("status").innerText="Sensor lỗi";
+    return;
+  }
 
-            document.getElementById("lux").innerText =
-            Math.round(lux) + " lux";
+  document.getElementById("lux").innerText=data.lux+" lux";
+  draw(data.lux);
+ }
 
-        }catch(e){
-            console.log("JSON lỗi");
-        }
-    }
-
-    // ===== LED =====
-    if(topic === "bh1750/led"){
-        let state = message.toString();
-
-        document.getElementById("status").innerText =
-        state === "ON" ? "💡 RGB ON" : "🌙 RGB OFF";
-    }
+ if(t==="bh1750/led"){
+  document.getElementById("status").innerText=m.toString();
+ }
 });
 
-// ===== DISCONNECT =====
+// mất kết nối
 setInterval(()=>{
-    if(Date.now() - lastDataTime > TIMEOUT){
-        document.getElementById("loadingText").style.display="block";
-        document.getElementById("mainContent").style.display="none";
-    }
+ if(Date.now()-last>5000){
+  document.getElementById("loading").style.display="block";
+  document.getElementById("main").style.display="none";
+ }
 },1000);
 
-// ===== BUTTON =====
-function sendCmd(cmd){
-    playClick();
-    client.publish("bh1750/control", cmd);
+// send
+function send(cmd){
+ clickSound();
+ client.publish("bh1750/control",cmd);
 }
-
-// ===== DEBUG =====
-client.on("offline", ()=>{
-    console.log("MQTT offline");
-    document.getElementById("status").innerText = "🔴 Offline";
-});
-
-client.on("reconnect", ()=>{
-    console.log("Reconnecting...");
-});
-
-client.on("error", err=>{
-    console.log("Error",err);
-});
 
 </script>
 
