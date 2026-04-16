@@ -39,7 +39,11 @@ canvas{
 button{
     padding:10px;
     margin:5px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
 }
+
 </style>
 </head>
 
@@ -91,7 +95,7 @@ function draw(value){
 
  ctx.beginPath();
  ctx.arc(150,150,100,0,Math.PI*2);
- ctx.strokeStyle='gray';
+ ctx.strokeStyle='rgba(255,255,255,0.1)';
  ctx.lineWidth=20;
  ctx.stroke();
 
@@ -99,42 +103,62 @@ function draw(value){
  ctx.arc(150,150,100,-Math.PI/2,-Math.PI/2+a);
  ctx.strokeStyle='lime';
  ctx.lineWidth=20;
+ ctx.lineCap='round';
  ctx.stroke();
 }
 
 // ===== MQTT =====
-const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+ reconnectPeriod: 1000
+});
 
 let lastDataTime = 0;
-const TIMEOUT = 3000; // 3s
+const TIMEOUT = 5000; // tăng lên cho ổn định
 
+// ===== CONNECT =====
 client.on("connect",()=>{
+ console.log("MQTT connected");
+
  client.subscribe("sensor/data");
  client.subscribe("bh1750/led");
 });
 
-// ===== NHẬN DATA =====
-client.on("message",(t,m)=>{
+// ===== RECEIVE =====
+client.on("message",(topic,message)=>{
+
+ console.log("DATA:", message.toString());
 
  lastDataTime = Date.now();
 
- // HIỆN MAIN
  document.getElementById("loading").style.display="none";
  document.getElementById("main").style.display="block";
 
- if(t==="sensor/data"){
+ // ===== SENSOR =====
+ if(topic==="sensor/data"){
 
-  let data=JSON.parse(m.toString());
+  let data;
 
-  document.getElementById("sensorName").innerText="🌐 "+data.name;
-
-  if(data.status==="ERROR"){
-    document.getElementById("value").innerText="ERROR";
-    document.getElementById("status").innerText="❌ Sensor lỗi";
+  try{
+    data = JSON.parse(message.toString());
+  }catch(e){
+    console.log("JSON lỗi");
     return;
   }
 
-  // ===== HIỂN THỊ 1 SỐ THẬP PHÂN =====
+  document.getElementById("sensorName").innerText = "🌐 " + data.name;
+
+  if(data.status==="ERROR"){
+    document.getElementById("value").innerText = "ERROR";
+    document.getElementById("status").innerText = "❌ Sensor lỗi";
+
+    // clear chart
+    let ctx=document.getElementById("chart").getContext("2d");
+    ctx.clearRect(0,0,300,300);
+
+    return;
+  }
+
+  // HIỂN THỊ 1 SỐ THẬP PHÂN
   let value = Number(data.value).toFixed(1);
 
   document.getElementById("value").innerText =
@@ -143,9 +167,10 @@ client.on("message",(t,m)=>{
   draw(parseFloat(value));
  }
 
- if(t==="bh1750/led"){
+ // ===== LED =====
+ if(topic==="bh1750/led"){
   document.getElementById("status").innerText =
-    m.toString()==="ON"?"💡 LED ON":"🌙 LED OFF";
+    message.toString()==="ON" ? "💡 LED ON" : "🌙 LED OFF";
  }
 });
 
@@ -166,6 +191,15 @@ function send(cmd){
  clickSound();
  client.publish("bh1750/control",cmd);
 }
+
+// ===== DEBUG =====
+client.on("error",(err)=>{
+ console.log("MQTT ERROR", err);
+});
+
+client.on("offline",()=>{
+ console.log("MQTT OFFLINE");
+});
 
 </script>
 
