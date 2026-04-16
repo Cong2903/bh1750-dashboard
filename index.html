@@ -69,20 +69,19 @@ button{
 
 <script>
 
-// unlock audio
+// ===== AUDIO FIX =====
 document.body.addEventListener("click", ()=>{
  let s=document.getElementById("sound");
  s.play().then(()=>{s.pause();s.currentTime=0;});
 },{once:true});
 
-// sound
 function clickSound(){
  let s=document.getElementById("sound");
  s.currentTime=0;
  s.play().catch(()=>{});
 }
 
-// chart
+// ===== CHART =====
 function draw(value){
  let ctx=document.getElementById("chart").getContext("2d");
  ctx.clearRect(0,0,300,300);
@@ -103,20 +102,23 @@ function draw(value){
  ctx.stroke();
 }
 
-// MQTT
+// ===== MQTT =====
 const client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
 
-let last=0;
+let lastDataTime = 0;
+const TIMEOUT = 3000; // 3s
 
 client.on("connect",()=>{
  client.subscribe("sensor/data");
  client.subscribe("bh1750/led");
 });
 
+// ===== NHẬN DATA =====
 client.on("message",(t,m)=>{
 
- last=Date.now();
+ lastDataTime = Date.now();
 
+ // HIỆN MAIN
  document.getElementById("loading").style.display="none";
  document.getElementById("main").style.display="block";
 
@@ -132,10 +134,13 @@ client.on("message",(t,m)=>{
     return;
   }
 
-  document.getElementById("value").innerText =
-    Math.round(data.value)+" "+data.unit;
+  // ===== HIỂN THỊ 1 SỐ THẬP PHÂN =====
+  let value = Number(data.value).toFixed(1);
 
-  draw(data.value);
+  document.getElementById("value").innerText =
+    value + " " + data.unit;
+
+  draw(parseFloat(value));
  }
 
  if(t==="bh1750/led"){
@@ -144,15 +149,19 @@ client.on("message",(t,m)=>{
  }
 });
 
-// mất kết nối
+// ===== AUTO LOADING =====
 setInterval(()=>{
- if(Date.now()-last>5000){
+
+ if(Date.now() - lastDataTime > TIMEOUT){
+
   document.getElementById("loading").style.display="block";
   document.getElementById("main").style.display="none";
+
  }
+
 },1000);
 
-// send
+// ===== SEND =====
 function send(cmd){
  clickSound();
  client.publish("bh1750/control",cmd);
